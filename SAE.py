@@ -7,13 +7,6 @@ import matplotlib.pyplot as plt
 
 '''Étape N°1 : Collecter les données'''
  
-#chargement des données
-
-client = pd.read_csv('clients_greendwell.csv')
-#historiques = pd.read_excel('historique_acces_greendwell.xlsx')
-
-
-
 
 #chargement des données
 
@@ -37,8 +30,6 @@ print(client.head())
 
 ##visualisation nos differents types de données 
 
-print(client.dtypes)  
-
 print(client.dtypes)  #J'ai remarqué que les attributs Date Inscription et Data Annulation n'etaient pas 
 #bien typé d'ou on les rend en type date time 
 
@@ -54,6 +45,7 @@ print('Le jeu des clients a une taille de :',client.shape)
 client['Date Inscription'] = pd.to_datetime(client['Date Inscription'])
 client['Date Annulation'] = pd.to_datetime(client['Date Annulation'])
 
+print(client.dtypes) # Pour verifier si le type a changé
 
 ## Traitement des anomalies sur les colonnes
 
@@ -66,7 +58,7 @@ print(client['Taux Abonnement'].head(3))
 # convertion du type de taux d abonnement en numerique qui sera float
 # et remplacement du symbole € par le vide genre on le supprime et on remplace le 112.99 par 2.99 pour eco basique
 client['Taux Abonnement'] = client['Taux Abonnement'].replace({'€': '', '112.99' : '2.99'}, regex=True).astype(float)
-print(client.dtypes) # Pour verifier si le type a changé
+
 
 
 ### Traitement de la colonne Remise
