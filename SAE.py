@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+
 '''Étape N°1 : Collecter les données'''
  
 #chargement des données
@@ -11,6 +12,12 @@ import matplotlib.pyplot as plt
 client = pd.read_csv('clients_greendwell.csv')
 #historiques = pd.read_excel('historique_acces_greendwell.xlsx')
 
+
+
+
+#chargement des données
+
+client = pd.read_csv('clients_greendwell.csv')
 
 #Conversion en data frames de données chargées
 client = pd.DataFrame(client)
@@ -24,12 +31,15 @@ print(client.head())
 
 ''' Étape N°2 : Nettoyer les données'''
 
+
 #Phase de nettoyage des données Clients
 
 
 ##visualisation nos differents types de données 
+
 print(client.dtypes)  
-#J'ai remarqué que les attributs Date Inscription et Data Annulation n'etait pas 
+
+print(client.dtypes)  #J'ai remarqué que les attributs Date Inscription et Data Annulation n'etaient pas 
 #bien typé d'ou on les rend en type date time 
 
 print(client.columns)
@@ -45,11 +55,7 @@ client['Date Inscription'] = pd.to_datetime(client['Date Inscription'])
 client['Date Annulation'] = pd.to_datetime(client['Date Annulation'])
 
 
-
-
 ## Traitement des anomalies sur les colonnes
-
-
 
 ### Traitement de la colonne Taux Abonnement
 
@@ -60,8 +66,7 @@ print(client['Taux Abonnement'].head(3))
 # convertion du type de taux d abonnement en numerique qui sera float
 # et remplacement du symbole € par le vide genre on le supprime et on remplace le 112.99 par 2.99 pour eco basique
 client['Taux Abonnement'] = client['Taux Abonnement'].replace({'€': '', '112.99' : '2.99'}, regex=True).astype(float)
-print(client.dtypes) #pour la verification
-print(client['Taux Abonnement'].head(3)) #pour la verification
+print(client.dtypes) # Pour verifier si le type a changé
 
 
 ### Traitement de la colonne Remise
@@ -73,7 +78,6 @@ client['Remise'] = client['Remise'].apply(lambda x: 1 if x == 'Oui' else 0) #il 
 
 
 ### Traitement de la colonne plan
-
 # Ici on va remplacer les valeurs manquantes par le plan Eco Basique vu que par defaut le plan 
 #pour tout utilisateur est Eco Basique
 
@@ -105,14 +109,7 @@ client['Email'] = client['Email'].apply(corriger_email)
 # que le client n'a pas annulé son forfait
 
 
-
-
-
 ## Traitement et Gestion des valeurs manquantes et duplicats
-
-
-
-
 
 ### Vérification des données manquantes
 # On utilise client.isnull().sum() pour vérifier s'il y a des valeurs manquantes dans chaque colonne
@@ -129,13 +126,13 @@ print(client.isnull().sum())
 ### Vérification des lignes dupliquées
 # On utilise client.duplicated().sum() pour vérifier s'il y a des lignes dupliquées
 # Relais de cette partie pour vérifier si des lignes dupliquées existent dans le DataFrame
-
 print("Nombre de lignes dupliquées :")
 print(client.duplicated().sum())
+#Pas de lignes dupliquées
+
 
 # Vérifier les valeurs uniques pour repérer les incohérences
 print("Valeurs uniques :\n", client.nunique())
-
 
 #Interprétation des valeurs uniques :
 #- Il y a 200 valeurs uniques pour les ID clients, ce qui indique qu'aucun ID client n'est identique.
@@ -161,8 +158,7 @@ print(client.dtypes)
 print("Statistiques descriptives :")
 print(client.describe())
 
-
-
+#Visualisation des valeurs aberrantes
 
 def afficher_boxplots(df):
     # Sélectionner les colonnes numériques à l'exception de 'ID Client'
@@ -189,10 +185,6 @@ afficher_boxplots(client)
 client['Resiliation'] = np.where(client['Date Annulation'].notnull(), 1, 0)
 #la valeur 1 dans la colonne "Résiliation" indique qu'un client a résilié son abonnement.
 #la valeur 0 dans la colonne "Résiliation" indique qu'un client n'a pas résilié son abonnement.
-
-
-
-
 
 
 
