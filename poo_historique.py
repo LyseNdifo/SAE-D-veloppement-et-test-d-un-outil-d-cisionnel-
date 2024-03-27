@@ -199,4 +199,28 @@ if __name__ == "__main__":
     data_processor = DataProcess('clients_greendwell.csv', 'historique_acces_greendwell.xlsx')
     data_processor.nettoyer_donnees()
     data_processor.explorer_donnees()
-    
+
+# Créer un DataFrame avec les informations demandées pour chaque client
+df_modelisation = pd.DataFrame()
+
+# Ajouter les colonnes 
+df_modelisation['ID Client'] = data_processor.client['ID Client']
+df_modelisation['Annulation'] = data_processor.client['Date Annulation'].notnull().astype(int)
+df_modelisation['Remise'] = data_processor.client['Remise'].apply(lambda x: 1 if x == 'Oui' else 0)
+
+# Calculer le nombre de sessions par client
+sessions_par_client = data_processor.data_historique.groupby('ID Client')['Date Heure'].count()
+df_modelisation = df_modelisation.merge(sessions_par_client, how='left', left_on='ID Client', right_index=True)
+df_modelisation.rename(columns={'Date Heure': 'Nombre Session'}, inplace=True)
+df_modelisation['Nombre Session'] = df_modelisation['Nombre Session'].fillna(0)
+
+# Calculer le pourcentage d'utilisation de chaque type de plan par client
+plans_par_client = data_processor.data_historique.groupby(['ID Client', 'Type Service'])['ID Service'].count().unstack(fill_value=0)
+plans_par_client = plans_par_client.div(plans_par_client.sum(axis=1), axis=0) * 100
+df_modelisation = df_modelisation.merge(plans_par_client, how='left', left_on='ID Client', right_index=True)
+df_modelisation.rename(columns={'Eco Basique': 'Pourcentage plan basique', 'Eco Confort': 'Pourcentage plan confort', 
+                                'Eco Premium':'Pourcentage plan premium'}, inplace=True)
+df_modelisation[['Pourcentage plan basique','Pourcentage plan confort','Pourcentage plan premium']] = df_modelisation[['Pourcentage plan basique', 'Pourcentage plan confort', 'Pourcentage plan premium']].fillna(0)
+
+# Afficher les premières lignes du DataFrame
+print(df_modelisation.head())
