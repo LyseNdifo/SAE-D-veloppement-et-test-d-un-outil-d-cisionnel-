@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
+
 
 class DataCleaningExploration:
     def __init__(self, data_file):
