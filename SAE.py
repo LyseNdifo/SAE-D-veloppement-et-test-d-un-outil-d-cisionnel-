@@ -1,462 +1,219 @@
-import numpy as np
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 
+class DataProcess:
+    """
+    Initialise l'objet DataProcess avec le chemin du fichier CSV.
 
-"""
-Importer les données
-"""
+    Parametres:
+    clients_file : Le chemin vers le fichier CSV contenant les données à analyser.
+    hist_service_file: Le chemin vers le fichier XLSX contenant les données à analyser.
+    """
+    #Collecter les données
+    def __init__(self, clients_file, hist_service_file):    
+        self.client = pd.read_csv(clients_file)
+        self.service = pd.read_excel(hist_service_file, sheet_name="Services Consommes")
+        self.infoLogin = pd.read_excel(hist_service_file, sheet_name="Sessions Login")
+        self.histService = pd.read_excel(hist_service_file, sheet_name="Historique Services")
+        self.data_historique = None
+        
+    """
+    Effectue la phase de nettoyage des données.
 
-df_client = pd.read_csv('clients_greendwell.csv')
-df_service = pd.read_excel('historique_acces_greendwell.xlsx', sheet_name = "Services Consommes")
-df_infoLogin = pd.read_excel('historique_acces_greendwell.xlsx', sheet_name = "Sessions Login")
-df_histService = pd.read_excel('historique_acces_greendwell.xlsx', sheet_name = "Historique Services")
-
-"""
-Nettoyer les données - partie information clients
-"""
-
-#Phase de nettoyage des données Clients
-
-
-##visualisation nos differents types de données 
-
-print(df_client.dtypes)  
-
-print(df_client.dtypes)  #J'ai remarqué que les attributs Date Inscription et Data Annulation n'etaient pas 
-#bien typé d'ou on les rend en type date time 
-
-print(df_client.columns)
-
-print('Le jeu des clients a une taille de :',df_client.shape)
-
-
-## Convertir les colonnes de dates au format approprié
-
-### Conversion des colonnes Data Inscription et Date d'Annulation en datetime
-
-df_client['Date Inscription'] = pd.to_datetime(df_client['Date Inscription'])
-df_client['Date Annulation'] = pd.to_datetime(df_client['Date Annulation'])
-
-
-## Traitement des anomalies sur les colonnes
-
-### Traitement de la colonne Taux Abonnement
-
-# Conversion de la colonne 'Taux Abonnement' en une colonne numérique
-
-print(df_client['Taux Abonnement'].head(3))
-
-# convertion du type de taux d abonnement en numerique qui sera float
-# et remplacement du symbole € par le vide genre on le supprime et on remplace le 112.99 par 2.99 pour eco basique
-df_client['Taux Abonnement'] = df_client['Taux Abonnement'].replace({'€': '', '112.99' : '2.99'}, regex=True).astype(float)
-print(df_client.dtypes) # Pour verifier si le type a changé
-
-
-### Traitement de la colonne Remise
-
-# Convertision la colonne 'Remise' en une colonne binaire (car il y'a des oui )
-df_client['Remise'] = df_client['Remise'].apply(lambda x: 1 if x == 'Oui' else 0) #il y'avait des nan dans Remise 
-# ca  remplace les nan par 0 c'est pourquoi plus bas il y'a plus de valeurs manquantes sur cette colonne
-
-
-
-### Traitement de la colonne plan
-# Ici on va remplacer les valeurs manquantes par le plan Eco Basique vu que par defaut le plan 
-#pour tout utilisateur est Eco Basique
-
-print(df_client['Plan'].head())
-# Remplacement des valeurs manquantes dans la colonne 'Plan' par le plan Eco Basique
-df_client['Plan'] = df_client['Plan'].fillna('Éco Basique')
-
-
-
-### Traitement de la colonne Email
-
-#L'on remarque la presence de plus d'un arobase dans nos emails et on veut donc le supprimer
-# Fonction pour corriger les adresses e-mail
-def corriger_email(email):
-    # Si l'adresse e-mail contient plus d'un caractère '@', supprimer le deuxième '@'
-    if email.count('@') > 1:
-        index_dernier_arobase = email.rfind('@')
-        email = email[:index_dernier_arobase] + email[index_dernier_arobase+1:]
+    Cette méthode ne prend pas d'entrée et ne renvoie rien en sortie.
+    """
+    def nettoyer_donnees(self):
+        self.convertir_dates()
+        self.convertir_numeric()
+        self.gerer_valeurs_manquantes_doublons()
+        self.join_tables()
+        self.process_lig_aberrant()
+        self.test_traitement()
     
-    return email
+    #Convertit les colonnes de dates au format datetime.
+    def convertir_dates(self):
+        self.infoLogin['Date Heure']=pd.to_datetime(self.infoLogin['Date Heure'])
+        self.client['Date Inscription'] = pd.to_datetime(self.client['Date Inscription'])
+        
+    #Convertit les colonnes de services au format numeric.
+    def convertir_numeric(self):
+        self.service["ID Service"] = pd.to_numeric(self.service['ID Service'].str.replace('Service',''))
+        self.histService["ID Service"] = pd.to_numeric(self.histService['ID Service'].str.replace('Service',''))
+    
+    #Gère les valeurs manquantes et les doublons dans le DataFrame.
+    def gerer_valeurs_manquantes_doublons(self):
+        print("Nombre de valeurs manquantes dans table service :", self.service.isnull().sum())
+        print("Nombre de valeurs manquantes dans table information session login :", self.infoLogin.isnull().sum())
+        print("Nombre de valeurs manquantes dans table historique service :", self.histService.isnull().sum())
+        
+        print("Nombre de lignes dupliquées dans table service :", self.service.duplicated().sum())
+        print("Nombre de lignes dupliquées dans table information session login :", self.infoLogin.duplicated().sum())
+        print("Nombre de lignes dupliquées dans table historique service :", self.histService.duplicated().sum())
+        
+        print("Nombre de plan d\'abonnement utilisés :", self.service['Type Service'].value_counts())
+        print("Nombre de services utilisés :", self.histService['ID Service'].value_counts().sort_index())
+        
+    #Joindre les tables
+    def join_tables(self):
+        self.data_historique = self.service.merge(self.histService, 'outer', 'ID Service')
+        self.data_historique = self.data_historique.merge(self.infoLogin, 'outer', 'ID Session')
+        self.data_historique = pd.merge(self.data_historique, self.client[['ID Client', 'Date Inscription']],
+                                        on='ID Client', how='left')
+        
+    #Traite les valeurs aberrantes
+    def process_lig_aberrant(self):
+        lig_aberrant = self.data_historique[self.data_historique['Date Heure'].dt.date < self.data_historique['Date Inscription']]
+        print("Nombre des lignes aberante : ", len(lig_aberrant))
+        df_premier_session = self.data_historique.groupby('ID Client')['Date Heure'].min().reset_index()
+        self.data_historique['Date Inscription'] = np.where(self.data_historique['ID Client'].isin(lig_aberrant['ID Client']),
+                                                            self.data_historique['ID Client'].map(df_premier_session.set_index('ID Client')['Date Heure'].dt.date),
+                                                            self.data_historique['Date Inscription'])
+        
+       
+    """
+    Teste le traitement des colonnes en vérifiant les valeurs après nettoyage.
 
+    Cette méthode ne prend pas d'entrée et ne renvoie rien en sortie.
+    """
+    def test_traitement(self):
+        #Affichage des types de données après nettoyage
+        print("Types de données après nettoyage :")
+        print(self.service.dtypes)
+        print(self.infoLogin.dtypes)
+        print(self.histService.dtypes)
 
-# Appliquons la fonction de correction sur la colonne 'Email'
-df_client['Email'] = df_client['Email'].apply(corriger_email)
-
-
-
-### Pour les valeurs manquantes de la colonne Date Annulation on ne peut pas les remplacer car ca signifie 
-# que le client n'a pas annulé son forfait
-
-
-## Traitement et Gestion des valeurs manquantes et duplicats
-
-### Vérification des données manquantes
-# On utilise client.isnull().sum() pour vérifier s'il y a des valeurs manquantes dans chaque colonne
-# Relais de cette partie pour vérifier si des valeurs manquantes ont été correctement traitées
-
-print("Nombre de valeurs manquantes dans chaque colonne :")
-print(df_client.isnull().sum())
-
-#On remarque que les valeurs manquantes ont été bien traitées. 
-#Les 79 valeurs manquantes dans la colonne Date Annulation signifie que 79 clients n'ont pas encore
-#annulés leur abonnement
-
-
-### Vérification des lignes dupliquées
-# On utilise client.duplicated().sum() pour vérifier s'il y a des lignes dupliquées
-# Relais de cette partie pour vérifier si des lignes dupliquées existent dans le DataFrame
-print("Nombre de lignes dupliquées :")
-print(df_client.duplicated().sum())
-#Pas de lignes dupliquées
-
-
-# Vérifier les valeurs uniques pour repérer les incohérences
-print("Valeurs uniques :\n", df_client.nunique())
-
-#Interprétation des valeurs uniques :
-#- Il y a 200 valeurs uniques pour les ID clients, ce qui indique qu'aucun ID client n'est identique.
-#- Il y a 199 valeurs uniques pour les noms des clients, ce qui peut suggérer qu'il y a deux clients ayant des noms identiques.
-#- Il y a 150 dates d'inscription uniques, ce qui pourrait signifier que 50 clients se sont inscrits le même jour. Parallèlement, la colonne de la date d'annulation montre qu'il y a 114 valeurs uniques, indiquant que des annulations ont eu lieu à des dates différentes.
-#- Il y a 3 valeurs uniques pour le plan, représentant nos trois plans différents, de même pour les taux d'abonnement.
-#- Pour la colonne de remise, il y a deux valeurs uniques, ce qui indique qu'un client peut bénéficier d'une remise ou non.
-
-
-
-#L'on peut aussi voir que l'on a pas de lignes dupliquées ou de doublons
-print(df_client.info()) 
-print(df_client.dtypes) 
-#L'on peut donc voir qu'a part la colonne Date Annulation ont a bien toujours 200 entrées sur 200 entrées 
-#L'on peut aussi voir que les types ont été bien traités
-
-
-
-### Vérification des statistiques descriptives pour identifier les valeurs aberrantes
-# On utilise client.describe() pour obtenir des statistiques descriptives
-# Relais de cette partie pour identifier les valeurs aberrantes dans les données
-
-print("Statistiques descriptives :")
-print(df_client.describe())
-
-#Visualisation des valeurs aberrantes
-
-def afficher_boxplots(df):
-    # Sélectionner les colonnes numériques à l'exception de 'ID Client'
-    colonnes_numeriques = df.select_dtypes(include=['int64', 'float64']).columns.drop('ID Client')
-
-    # Afficher des boxplots pour chaque colonne numérique
-    for colonne in colonnes_numeriques:
-        plt.figure(figsize=(8, 6))
-        plt.boxplot(df[colonne])
-        plt.title(f'Boxplot de {colonne}')
-        plt.xlabel(colonne)
-        plt.ylabel('Valeurs')
+        #Affichage des lignes abérrants après nettoyage
+        self.data_historique['Date Inscription'] = pd.to_datetime(self.data_historique['Date Inscription'])
+        lig_aberrant_traitee = self.data_historique[self.data_historique['Date Heure'].dt.date < self.data_historique['Date Inscription']].reset_index()
+        print("Nombre des lignes aberante apres traitee : ", len(lig_aberrant_traitee))
+    
+    "Méthode pour explorer des données"
+    def explorer_donnees(self):
+        self.nb_session_clients()
+        self.nb_interaction_client()
+        self.nb_service_utilise()
+        self.nb_plan_utilise()
+        self.nb_session_par_jour()
+        self.nb_session_mois()
+        self.nb_session_annee()
+             
+    #Nombre de session de chaque clients
+    def nb_session_clients(self):
+        sessions_par_client = self.data_historique.groupby('ID Client')['Date Heure'].count()
+        print("Nombre de session de chaque clients \n", sessions_par_client.sort_values(ascending=False))
+        ##Visualisation des données
+        plt.figure(figsize=(20, 8))
+        sessions_par_client.plot(kind='bar')
+        plt.title('Nombre de session par client')
+        plt.xlabel('Nombre total de sessions')
+        plt.ylabel('ID clients')
+        plt.show()
+        
+    #Nombre d'interaction de différents clients
+    def nb_interaction_client(self):
+        interactions_par_client = self.data_historique.groupby('ID Client')['Nombre Interactions'].sum()
+        print("Nombre d'interaction de différents clients \n", interactions_par_client.sort_values(ascending=False))
+        ##Visualisation des données
+        plt.figure(figsize=(20, 8))
+        interactions_par_client.plot(kind='bar')
+        plt.title('Nombre d\'interaction par client')
+        plt.xlabel('Nombre total d\'interactions')
+        plt.ylabel('ID clients')
+        plt.show()
+        
+    #Nombre de service utilise
+    def nb_service_utilise(self):
+        service_counts = self.data_historique['ID Service'].value_counts()
+        print("Nombre utilisé de différents services \n",service_counts.sort_values(ascending=False))
+        ##Visualisation des données
+        plt.figure(figsize=(20, 8))
+        service_counts.plot(kind='bar')
+        plt.title('Nombre utilisé de différents sevices')
+        plt.xlabel('Service')
+        plt.ylabel('Nombre de fois utilisé')
+        plt.xticks(rotation=360)
+        plt.show()
+        
+    #Nombre de plan d'abonnement
+    def nb_plan_utilise(self):
+        plan_counts = self.data_historique['Type Service'].value_counts()
+        print("Nombre utilisé de différent plan d'abonnement \n",plan_counts)
+        ##Visualisation des données
+        plt.figure(figsize=(20, 8))
+        plan_counts.plot(kind='bar')
+        plt.title('Nombre utilsé de différents plans d\'abonnement ')
+        plt.xlabel('Type de plan d\'abonnement')
+        plt.ylabel('Nombre de fois choisisé')
+        plt.xticks(rotation=360)
+        plt.show()
+        
+    #Nombre de session dans différent jour
+    def nb_session_par_jour(self):
+        sessions_par_jour = self.data_historique['Date Heure'].dt.date.value_counts().sort_index()
+        print("Nombre de session dans different jours: \n", sessions_par_jour.sort_values(ascending=False))
+        print("Nombre moyenne de session dans un jours:", sessions_par_jour.mean())
+        ##Visualisation des données
+        plt.figure(figsize=(20, 8))
+        sessions_par_jour.plot(kind='line')
+        plt.title('Nombre de session dans différent jours')
+        plt.xlabel('Date')
+        plt.ylabel('Nombre de session')
+        plt.show()
+        
+    # Nombre de session dans un mois
+    def nb_session_mois(self):
+        sessions_par_mois = self.data_historique['Date Heure'].dt.to_period('M').value_counts().sort_index()
+        print("Nombre de session dans different mois: \n", sessions_par_mois.sort_values(ascending=False))
+        print("Nombre moyenne de session dans un mois:", sessions_par_mois.mean())
+        ##Visualisation des données
+        plt.figure(figsize=(20, 8))
+        sessions_par_mois.plot(kind='line')
+        plt.title('Nombre de session dans différent mois')
+        plt.xlabel('Mois')
+        plt.ylabel('Nombre de session')
         plt.show()
 
-# Appelons la fonction avec votre DataFrame client
-afficher_boxplots(df_client)
 
-#L'absence de valeurs aberrantes dans nos données, comme indiqué par l'observation des boxplots, témoigne de
-#la cohérence et de la fiabilité de nos données. Cela renforce notre confiance dans la qualité de notre 
-#ensemble de données et confirme sa robustesse pour les analyses statistiques à venir. 
+    # Nombre de session dans une annee
+    def nb_session_annee(self):
+        sessions_par_annee = self.data_historique['Date Heure'].dt.to_period('Y').value_counts().sort_index()
+        print("Nombre de session dans different année: \n", sessions_par_annee.sort_values(ascending=False))
+        print("Nombre moyenne de session dans une année:", sessions_par_annee.mean())
+        ##Visualisation des données
+        plt.figure(figsize=(20, 8))
+        sessions_par_annee.plot(kind='line')
+        plt.title('Nombre de session dans différent mois')
+        plt.xlabel('Année')
+        plt.ylabel('Nombre de session')
+        plt.show()
 
-## Ajout de la colonne "Resiliation" en utilisant numpy.where()
+if __name__ == "__main__":
+    data_processor = DataProcess('clients_greendwell.csv', 'historique_acces_greendwell.xlsx')
+    data_processor.nettoyer_donnees()
+    data_processor.explorer_donnees()
 
-df_client['Resiliation'] = np.where(df_client['Date Annulation'].notnull(), 1, 0)
-#la valeur 1 dans la colonne "Résiliation" indique qu'un client a résilié son abonnement.
-#la valeur 0 dans la colonne "Résiliation" indique qu'un client n'a pas résilié son abonnement.
+# Créer un DataFrame avec les informations demandées pour chaque client
+df_modelisation = pd.DataFrame()
 
-"""
-Nettoyer les données - partie historique
-"""
+# Ajouter les colonnes 
+df_modelisation['ID Client'] = data_processor.client['ID Client']
+df_modelisation['Annulation'] = data_processor.client['Date Annulation'].notnull().astype(int)
+df_modelisation['Remise'] = data_processor.client['Remise'].apply(lambda x: 1 if x == 'Oui' else 0)
 
-# Visualisation les types de données
-## Table Services Consommes
-print(df_service.dtypes)
-#La variable "ID Service" peut être convertir en numeric pour faciliter la calcul
+# Calculer le nombre de sessions par client
+sessions_par_client = data_processor.data_historique.groupby('ID Client')['Date Heure'].count()
+df_modelisation = df_modelisation.merge(sessions_par_client, how='left', left_on='ID Client', right_index=True)
+df_modelisation.rename(columns={'Date Heure': 'Nombre Session'}, inplace=True)
+df_modelisation['Nombre Session'] = df_modelisation['Nombre Session'].fillna(0)
 
-## Table Sessions Login
-print(df_infoLogin.dtypes)
-#La variable "Date Heure" doit être en forme datetime
+# Calculer le pourcentage d'utilisation de chaque type de plan par client
+plans_par_client = data_processor.data_historique.groupby(['ID Client', 'Type Service'])['ID Service'].count().unstack(fill_value=0)
+plans_par_client = plans_par_client.div(plans_par_client.sum(axis=1), axis=0) * 100
+df_modelisation = df_modelisation.merge(plans_par_client, how='left', left_on='ID Client', right_index=True)
+df_modelisation.rename(columns={'Eco Basique': 'Pourcentage plan basique', 'Eco Confort': 'Pourcentage plan confort', 
+                                'Eco Premium':'Pourcentage plan premium'}, inplace=True)
+df_modelisation[['Pourcentage plan basique','Pourcentage plan confort','Pourcentage plan premium']] = df_modelisation[['Pourcentage plan basique', 'Pourcentage plan confort', 'Pourcentage plan premium']].fillna(0)
 
-## Table Historique Services
-print(df_histService.dtypes)
-#La variable "ID Service" peut être convertir en numeric pour faciliter la calcul
-
-# Traitement type de variables
-## Conversion des colonnes "ID Service" en numeric
-df_service["ID Service"] = pd.to_numeric(df_service['ID Service'].str.replace('Service',''))
-print(df_service.dtypes)
-df_histService["ID Service"] = pd.to_numeric(df_histService['ID Service'].str.replace('Service',''))
-print(df_histService.dtypes)
-
-## Conversion la colonne "Date Heure" en datetime
-df_infoLogin['Date Heure']=pd.to_datetime(df_infoLogin['Date Heure'])
-print(df_infoLogin.dtypes)
-
-# Vérification valeurs manquantes
-print(df_service.info())
-print(df_infoLogin.info())
-print(df_histService.info())
-#Pas de valeurs manquantes
-
-# Vérification des textes incohérents et typos(fautes de frappe)
-print(df_service['Type Service'].value_counts())
-#3 types de service, corresponds à la description dans le sujet
-
-print(df_histService['ID Service'].value_counts().sort_index())
-#18 services, corresponds à la description dans le sujet
-#En conclusion, pas de donnees incoherents
-
-# Vérification des valeurs abérantes
-## La date de session login ne doit pas être avant de la date d'inscription
-
-### Joindre les tables
-data_historique = df_service.merge(df_histService,'outer','ID Service')
-data_historique = data_historique.merge(df_infoLogin,'outer','ID Session')
-df_client['Date Inscription'] =  pd.to_datetime(df_client['Date Inscription'])
-data_historique = pd.merge(data_historique, df_client[['ID Client', 'Date Inscription']], on='ID Client', how='left')
-print(data_historique.info())
-
-### Trouver des lignes aberrantes
-lig_aberrant = data_historique[data_historique['Date Heure'].dt.date < data_historique['Date Inscription']]
-print(lig_aberrant['ID Client'].value_counts())
-print("Nombre des lignes aberante : ", len(lig_aberrant))
-
-# Traitement données abérantes
-## Trouver la date de la première session pour chaque client
-df_premier_session = data_historique.groupby('ID Client')['Date Heure'].min().reset_index()
-
-## Remplacer la date d'inscription par la date de la première session login pour les lignes aberrantes
-data_historique['Date Inscription'] = np.where(data_historique['ID Client'].isin(lig_aberrant['ID Client']),
-                                    data_historique['ID Client'].map(df_premier_session.set_index('ID Client')['Date Heure'].dt.date),
-                                    data_historique['Date Inscription'])
-
-## Verifier si les lignes sont bien traitée
-data_historique['Date Inscription'] =  pd.to_datetime(data_historique['Date Inscription'])
-lig_aberrant2 = data_historique[data_historique['Date Heure'].dt.date < data_historique['Date Inscription']].reset_index()
-print("Nombre des lignes aberante apres traitee : ",len(lig_aberrant2))
-
-
-# Données dupliquées
-print(df_service[df_service.duplicated()])
-print(df_infoLogin[df_infoLogin.duplicated()])
-print(df_histService[df_histService.duplicated()])
-#Pas de données dupliquées
-
-"""
-#Explorer les données
-"""
-
-# Fusioner les données sur l'historique accès avec les données sur l'information client
-# et enlever les colonnes non concernées
-data = pd.merge(data_historique, df_client, on='ID Client', how='outer')
-col_conserve = ["ID Service", "Nom Service","Type Service", 
-                "ID Client", "ID Session", "Date Heure", 
-                "Nombre Interactions", "Nom Client", "Email", 
-                "Date Inscription", "Plan", "Taux Abonnement", 
-                "Remise", "Date Annulation", "Resiliation"]
-data = data[col_conserve]
-print(data_historique.info())
-
-# Calcul de la durée de l'abonnement avant résiliation
-# Pour les clients ayant résilié leur abonnement
-clients_resilies = df_client[df_client['Resiliation'] == 1]
-clients_non_resilies = df_client[df_client['Resiliation'] == 0]
-clients_resilies['Durée Avant Resiliation'] = clients_resilies['Date Annulation'] - clients_resilies['Date Inscription']
-
-# Analyse des clients avec remise ayant résilié
-# Nombre de clients avec remise ayant résilié leur abonnement
-clients_resilies_avec_remise = clients_resilies[clients_resilies['Remise'] == 1]
-nb_clients_resilies_avec_remise = len(clients_resilies_avec_remise)
-
-# Nombre total de clients ayant résilié leur abonnement
-nb_total_clients_resilies = len(clients_resilies)
-nb_total_clients_non_resilies = len(clients_non_resilies)
-
-# Comparer le pourcentage de clients avec remise ayant résilié leur abonnement avec ceux qui ont résilié sans remise et ceux qui n'ont pas résilié mais ont bénéficié d'une remise
-# Nombre de clients sans résiliation ayant bénéficié d'une remise
-clients_non_resilies_avec_remise = df_client[(df_client['Resiliation'] == 0) & (df_client['Remise'] == 1)]
-nb_clients_non_resilies_avec_remise = len(clients_non_resilies_avec_remise)
-
-# Nombre de clients sans résiliation n'ayant pas bénéficié d'une remise
-clients_non_resilies_sans_remise = df_client[(df_client['Resiliation'] == 0) & (df_client['Remise'] == 0)]
-nb_clients_non_resilies_sans_remise = len(clients_non_resilies_sans_remise)
-
-# Calcul des pourcentages
-pourcentage_clients_resilies_avec_remise = (nb_clients_resilies_avec_remise / nb_total_clients_resilies) * 100
-pourcentage_clients_non_resilies_avec_remise = (nb_clients_non_resilies_avec_remise / nb_total_clients_non_resilies) * 100
-pourcentage_clients_non_resilies_sans_remise = (nb_clients_non_resilies_sans_remise / nb_total_clients_resilies) * 100
-
-# Affichage des résultats
-print("Pourcentage de clients avec remise ayant résilié leur abonnement :", pourcentage_clients_resilies_avec_remise)
-print("Pourcentage de clients avec remise n'ayant pas résilié leur abonnement :", pourcentage_clients_non_resilies_avec_remise)
-print("Pourcentage de clients sans remise n'ayant pas résilié leur abonnement par rapport aux resilies :", pourcentage_clients_non_resilies_sans_remise)
-
-#Les résultats suggèrent que l'offre de remises semble jouer un rôle significatif dans la rétention des clients.
- #En effet, le pourcentage élevé de résiliation parmi les clients bénéficiant de remises (environ 96.69%) 
-# indique que ces remises ne sont peut-être pas aussi efficaces pour fidéliser les clients qu'on pourrait le 
- #penser. En revanche, le pourcentage plus bas de résiliation parmi les clients sans remise (environ 31.65%) 
- #suggère que ces clients sont potentiellement plus fidèles à l'entreprise. Cependant, il est important de noter
- #que même parmi les clients sans remise, un pourcentage significatif (environ 44.63%) a tout de même résilié 
- #leur abonnement, ce qui montre que d'autres facteurs peuvent également influencer la décision de résilier. 
-
-# Nombre de session de chaque clients
-print("Nombre de session de chaque clients \n",data_historique.groupby('ID Client')['Date Heure'].count().sort_values(ascending=False))
-#Le nombre le plus élevé de sessions login est celui du client 8187 avec 22 fois. 
-#Les clients 3753, 9311, 9208, 7239 et 5428, qui ne se sont connectés qu'une seule fois, 
-#sont ceux qui ont le plus petit nombre de sessions.
-
-# Nombre d'interaction de différents clients
-print("Nombre d'interaction de différents clients \n",data.groupby('ID Client')['Nombre Interactions'].sum().sort_values(ascending=False))
-#Le plus grand nombre d'interactions est encore le client 8187, qui a interagi 619 fois. 
-#Le moins nombreux est le client 5428 qui n'a interagi que 8 fois.
-
-# Le service le plus utilise
-print("Nombre utilisé de différents services \n",data['ID Service'].value_counts().sort_values(ascending=False))
-#Le service le plus utilisé est le service 5 et 13. 
-
-# Le plan d'abonnement le plus utilise
-print("Nombre utilisé de différent plan d'abonnement \n",data['Type Service'].value_counts())
-#Le plan d'abonnement le plus choisi est le plan Eco Basique (311). 
-
-# Nombre de session dans un jour
-print("Nombre de session dans different jours: \n", data['Date Heure'].dt.date.value_counts().sort_values(ascending=False))
-print("Nombre moyenne de session dans un jours:", data['Date Heure'].dt.date.value_counts().mean())
-#Le 15 septembre 2021 a eu le plus grand nombre de visites avec 15 visites. Ensuite le 15 mars 2021 avec 10 visites.
-#Le nombre moyen d'interactions par jour est de 1,85, soit environ deux fois par jour.
-
-# Nombre de session dans un mois
-print("Nombre de session dans different mois: \n", data['Date Heure'].dt.to_period('M').value_counts().sort_values(ascending=False))
-print("Nombre moyenne de session dans un mois:", data['Date Heure'].dt.to_period('M').value_counts().mean())
-#Le nombre moyen de session par mois est d'environ 17,64, soit environ 18 sessions.
-#Parmi tout, le mois de septembre 2021 a eu le plus grand nombre de sessions login avec 64 sessions. 
-#Et le mois de novembre 2023 a eu le plus petit nombre de sessions avec seulement 1 session.
-#Il y a une tendance générale à la baisse du nombre de sessions depuis février 2022.
-
-# Nombre de session dans une annee
-print("Nombre de session dans different année: \n", data['Date Heure'].dt.to_period('Y').value_counts().sort_values(ascending=False))
-print("Nombre moyenne de session dans une année:", data['Date Heure'].dt.to_period('Y').value_counts().mean())
-#On observe une tendance générale à la baisse du nombre de sessions, 
-#avec plus de 300 sessions en 2021 et seulement 48 sessions en 2023.
-
-# Visualisations des données
-def plot_pie_chart(labels, sizes, title):
-    """Affiche un diagramme à secteurs."""
-    colors = ['lightcoral', 'lightskyblue']
-    plt.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=140)
-    plt.title(title)
-    plt.axis('equal')
-    plt.show()
-
-def plot_histogram(data, title, xlabel, ylabel):
-    """Affiche un histogramme."""
-    plt.hist(data, bins=20, color='skyblue', edgecolor='black')
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.title(title)
-    plt.grid(True)
-    plt.show()
-
-# Appel des fonctions avec les données pertinentes
-plot_histogram(clients_resilies['Durée Avant Resiliation'].dt.days, 
-               'Distribution de la durée avant résiliation pour les clients ayant résilié', 
-               'Durée avant résiliation (jours)', 
-               'Nombre de clients')
-
-plot_pie_chart(['Avec remise', 'Sans remise'], 
-               [nb_clients_resilies_avec_remise, len(clients_resilies) - nb_clients_resilies_avec_remise], 
-               'Répartition des clients ayant résilié selon la présence de remise')
-
-plot_pie_chart(['Avec remise', 'Sans remise'], 
-               [nb_clients_non_resilies_avec_remise, len(clients_non_resilies) - nb_clients_non_resilies_avec_remise], 
-               'Répartition des clients n\'ayant pas résilié selon la présence de remise')
-
-# Données pour le diagramme à secteurs de ceux qui n'ont pas résiliés et sans remise par rapport aux résiliés
-labels = ['Clients sans remise n\'ayant pas résilié', 'Clients résiliés']
-sizes = [pourcentage_clients_non_resilies_sans_remise, 100 - pourcentage_clients_non_resilies_sans_remise]
-
-# Appel de la fonction pour afficher le diagramme à secteurs
-plot_pie_chart(labels, sizes, 'Répartition des clients sans remise n\'ayant pas résilié par rapport aux résiliés')
-
-## Diagramme en barres de nombre de session de différents clients
-sessions_par_client = data.groupby('ID Client')['Date Heure'].count()
-plt.figure(figsize=(20, 8))
-sessions_par_client.plot(kind='bar')
-plt.title('Nombre de session par client')
-plt.xlabel('Nombre total de sessions')
-plt.ylabel('ID clients')
-plt.show()
-
-## Diagramme en barres de nombre d'interaction de différents clients
-interactions_par_client = data.groupby('ID Client')['Nombre Interactions'].sum()
-plt.figure(figsize=(20, 8))
-interactions_par_client.plot(kind='bar')
-plt.title('Nombre d\'interaction par client')
-plt.xlabel('Nombre total d\'interactions')
-plt.ylabel('ID clients')
-plt.show()
-
-## Diagramme en barres de nombre d'utilisé de différents sevices
-service_counts = data['ID Service'].value_counts()
-plt.figure(figsize=(20, 8))
-service_counts.plot(kind='bar')
-plt.title('Nombre utilisé de différents sevices')
-plt.xlabel('Service')
-plt.ylabel('Nombre de fois utilisé')
-plt.xticks(rotation=360)
-plt.show()
-
-## Diagramme en barres de nombre de choisi de différents plans
-plan_counts = data['Type Service'].value_counts()
-plt.figure(figsize=(20, 8))
-plan_counts.plot(kind='bar')
-plt.title('Nombre utilsé de différents plans d\'abonnement ')
-plt.xlabel('Type de plan d\'abonnement')
-plt.ylabel('Nombre de fois choisisé')
-plt.xticks(rotation=360)
-plt.show()
-
-## Graphique linéaire de nombre de session dans différents jours
-sessions_par_jour = data['Date Heure'].dt.date.value_counts().sort_index()
-plt.figure(figsize=(20, 8))
-sessions_par_jour.plot(kind='line')
-plt.title('Nombre de session dans différent jours')
-plt.xlabel('Date')
-plt.ylabel('Nombre de session')
-plt.show()
-
-## Graphique linéaire de nombre de session dans différents mois
-sessions_par_mois = data['Date Heure'].dt.to_period('M').value_counts().sort_index()
-plt.figure(figsize=(20, 8))
-sessions_par_mois.plot(kind='line')
-plt.title('Nombre de session dans différent mois')
-plt.xlabel('Mois')
-plt.ylabel('Nombre de session')
-plt.show()
-
-## Graphique linéaire de nombre de session dans différents années
-sessions_par_annee = data['Date Heure'].dt.to_period('Y').value_counts().sort_index()
-plt.figure(figsize=(20, 8))
-sessions_par_annee.plot(kind='line')
-plt.title('Nombre de session dans différent mois')
-plt.xlabel('Année')
-plt.ylabel('Nombre de session')
-plt.show()
-
-"""
-Preparer les données pour la modelisation
-"""
-
-# Création data frame
-data_final = pd.DataFrame()
-data_final['ID Client'] = df_client['ID Client']
-data_final['Annulation'] = df_client['Resiliation']
-data_final['Remise'] = df_client['Remise']
-data_final['Nombre de sessions'] = data_historique.groupby('ID Client')['Date Heure'].count()
-data_final['Pourcentage du plan premium'] = (data_historique[data_historique['Type Service'] == 'Premium Plan'].groupby('ID Client').size() / data_historique.groupby('ID Client').size()) * 100
-
+# Afficher les premières lignes du DataFrame
+print(df_modelisation.head())
